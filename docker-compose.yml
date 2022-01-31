@@ -1,0 +1,74 @@
+version: "3.7"
+services:
+  
+  kongdb:
+    build: 
+      context: ./kongdb
+    restart: unless-stopped
+    env_file: 
+      - ./.env/kongdb/.env 
+    volumes:
+      - kongdb-vol:/var/lib/postgresql/data
+    ports: 
+      - "5432:5432"
+    networks:
+      - kong-net
+  
+  kong-migrations:
+    image: kong:2.4-alpine
+    restart: on-failure
+    entrypoint: sh -c "sleep 10 && kong migrations bootstrap -v"
+    env_file: 
+      - ./.env/kong/kong.env 
+    depends_on:
+      - kongdb
+    networks:
+      - kong-net
+  
+  kong:
+    image: kong:2.4-alpine
+    restart: unless-stopped
+    env_file: 
+      - ./.env/kong/kong.env 
+    ports:
+      - 80:8000
+      - 443:8443
+      - 8001:8001
+      - 8444:8444
+    # volumes: #DEV
+    #   - ./certs:/ssl
+    depends_on: 
+      - kongdb
+    networks:
+      - kong-net
+  
+  konga-prepare:
+    image: pantsel/konga:next
+    restart: on-failure
+    env_file: 
+      - ./.env/kong/konga.env
+    links:
+      - kongdb
+    depends_on:
+      - kongdb
+    networks:
+      - kong-net
+
+  konga:
+    image: pantsel/konga
+    restart: unless-stopped
+    env_file: 
+      - ./.env/kong/konga.env
+    ports:
+      - 9000:1337
+    depends_on:
+      - kongdb
+    networks:
+      - kong-net
+
+volumes:
+  kongdb-vol:
+
+networks:
+  kong-net:
+    driver: bridge
